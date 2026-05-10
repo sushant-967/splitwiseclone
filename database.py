@@ -9,6 +9,9 @@ load_dotenv()
 # Get DATABASE_URL
 DATABASE_URL = os.getenv("DATABASE_URL")
 
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL environment variable is not set. Please configure it in your environment or .env file.")
+
 # Create PostgreSQL engine
 engine = create_engine(DATABASE_URL)
 
