@@ -93,14 +93,26 @@ def create_expense(expense: ExpenseCreate, db: Session = Depends(get_db)):
     # STEP 2 — Calculate equal split
     split_amount = expense.amount / len(expense.participants)
 
-    # STEP 3 — Insert into expense_splits
-    for user_id in expense.participants:
+    # STEP 3 — Ensure payer is included
+    all_users = list(expense.participants)
+
+    if expense.paid_by not in all_users:
+        all_users.append(expense.paid_by)
+
+    # STEP 4 — Insert into expense_splits
+    for user_id in all_users:
 
         paid_amount = 0
 
         # User who paid full amount
         if user_id == expense.paid_by:
             paid_amount = expense.amount
+
+        # Only participants owe split
+        owed_amount = 0
+
+        if user_id in expense.participants:
+            owed_amount = split_amount
 
         # Get previous balance
         last_split = (
@@ -115,8 +127,8 @@ def create_expense(expense: ExpenseCreate, db: Session = Depends(get_db)):
         if last_split:
             opening_balance = last_split.closing_balance
 
-        # Calculate balance change
-        net_change = paid_amount - split_amount
+        # Correct balance calculation
+        net_change = paid_amount - owed_amount
 
         closing_balance = opening_balance + net_change
 
@@ -124,7 +136,7 @@ def create_expense(expense: ExpenseCreate, db: Session = Depends(get_db)):
         split = ExpenseSplit(
             expense_id=new_expense.id,
             user_id=user_id,
-            amount_owed=split_amount,
+            amount_owed=owed_amount,
             amount_paid=paid_amount,
             opening_balance=opening_balance,
             closing_balance=closing_balance
@@ -142,9 +154,6 @@ def create_expense(expense: ExpenseCreate, db: Session = Depends(get_db)):
         "comments": new_expense.comments,
         "created_at": new_expense.created_at
     }
-
-# Note: delete endpoint removed to prevent deleting expenses via API
-# (Delete operations are disabled per project requirements)
 
 
 @app.get("/balances")
